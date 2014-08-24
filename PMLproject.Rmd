@@ -1,0 +1,82 @@
+---
+title: "Practical Machine Learning Project"
+output: html_document
+---
+Fisrtly I read the data from the working directory.
+
+```{r Loading, echo=TRUE,results='hide'}
+training <- read.table("pml-training.csv", header=T, sep=",")
+dim(training)
+str(training)
+```
+
+Then I looked at the summary of the data to see if there were any missing or NA in the data set.
+
+```{r view, echo=TRUE,results='hide'}
+summary(training)
+```
+
+There were 406 row in the data where the value of the variable new_window is "yes" and then values of few statistics for the data were calculated. These statistics were calculated only for few row and remaining row either had NA, Inf or blank values. So I decided to remove the row were new_window="yes"
+
+```{r, echo=TRUE}
+training1 <- training[training$new_window =="no",]
+dim(training1)
+```
+Next to reduce the number of variable I used nearZeroVar() function in caret package to identify the variable that had zero or near zero variance and hence will not be good predictors. I was able to reduce the number of variable to 59.
+
+```{r nearZeroVariance, echo=TRUE}
+library(caret)
+library(ggplot2)
+set.seed(1)
+nsvtraining <- nearZeroVar(training1, saveMetrics = TRUE)
+sum(!nsvtraining$nzv)
+training2 <- training1[, !nsvtraining$nzv]
+dim(training2)
+```
+There were few other variables like ID, user_name, time_stamps and num_window which I removed before building model. Final data set had 52 variables and one outcome variable.
+
+```{r, echo=TRUE}
+training2 <-training2[, -c(1,2,3,4,5,6)]
+dim(training2)
+```
+
+Then using createDataPartition in caret package I created my training and testing data set (70%/30%).
+
+```{r, echo=TRUE}
+inTraining <- createDataPartition(training2$classe,p=0.7, list= F)
+TrainMod <- training2[inTraining,]
+TestMod <- training2[-inTraining,]
+
+dim(TrainMod)
+dim(TestMod)
+```
+
+I build my firts model using method="rpart" in train() function in caret package.
+The out-of-sample accuracy that I obtained was 49%.
+
+```{r rpart, echo=TRUE,cache=TRUE}
+library(caret)
+modFit <- train(classe ~., data=TrainMod, method="rpart")
+modFit$finalModel                
+confusionMatrix(predict(modFit, newdata= TestMod), TestMod$classe)
+```
+Next I tried building a random forest model but due to memory limitations of my machine I kept get errors. So I attempted building a model using svm() in e1071 package.
+The out-of-sample accuracy that I obtained was 94.31%.
+
+```{r svm, echo=TRUE,cache=TRUE}
+library(e1071)
+modFitsvm <- svm(classe ~., data=TrainMod)
+confusionMatrix(predict(modFitsvm, newdata= TestMod), TestMod$classe)
+```
+I applied same feature selection criterion to the testing data set and got the predictions
+
+```{r Testing, echo=TRUE}
+library(caret)
+testing <- read.table("pml-testing.csv", header=T, sep=",")
+sum(is.na(testing))
+testingMdl <- testing[,!nsvtraining$nzv]
+dim(testingMdl)
+testingMdl <- testingMdl[,-c(1,2,3,4,5,6)]
+sum(is.na(testingMdl))
+predict(modFitsvm, newdata= testingMdl)
+```
